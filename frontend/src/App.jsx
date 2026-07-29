@@ -3,10 +3,9 @@ import Sidebar from "./components/sidebar";
 import Navbar from "./components/navbar";
 
 
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import Inventory from "./pages/Inventory";
-import Workbooks from "./pages/Workbooks";
+import Login from "./pages/login";
+import Dashboard from "./pages/dashboard";
+import Workbooks from "./pages/workbooks";
 import Jobs from "./pages/Jobs";
 import Flows from "./pages/Flows";
 import Executions from "./pages/Executions";
