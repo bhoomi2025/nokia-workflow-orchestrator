@@ -1,12 +1,1 @@
-fastapi
-uvicorn[standard]
-sqlalchemy
-pymysql
-python-dotenv
-pydantic
-python-multipart
-celery
-redis
-passlib
-python-jose
-bcrypt
+
