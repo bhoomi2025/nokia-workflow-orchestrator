@@ -12,3 +12,4 @@ passlib
 python-jose
 bcrypt
 email-validator
+cryptography
