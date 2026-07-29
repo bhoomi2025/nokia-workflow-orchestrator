@@ -11,3 +11,4 @@ redis
 passlib
 python-jose
 bcrypt
+email-validator
