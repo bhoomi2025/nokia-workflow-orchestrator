@@ -179,7 +179,8 @@ def _execute_task(workflow_name: str, task: dict, context: dict, conn_mgr, optio
 
     for attempt in range(1, attempts_allowed + 1):
         command = interpolate(command_template, context)
-        host = None  # host resolution for non-local drivers is a follow-up (see connection_manager.py)
+        host_name = task.get("host")
+        host = context.get("hosts", {}).get(host_name) if host_name else None
         outcome = conn_mgr.execute(node_type, host, command)
         last_exit_code, last_stdout, last_stderr = outcome.exit_code, outcome.stdout, outcome.stderr
 
