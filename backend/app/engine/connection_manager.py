@@ -6,7 +6,7 @@ needs to know which transport a task is using.
 
 Status of each node_type in this build:
     local        -- fully implemented (real subprocess execution)
-    ssh          -- interface defined, not wired to a real transport yet
+    ssh          -- fully implemented (real paramiko transport)
     niam         -- interface defined, not wired to a real transport yet
     netconf      -- interface defined, not wired to a real transport yet
     api_rest/    -- interface defined, not wired to a real transport yet
@@ -16,19 +16,11 @@ Status of each node_type in this build:
     api_json_rpc/
     api_xml_rpc/
     api_redfish/
-
-Unimplemented types return a clean, structured "not implemented" result
-(exit_code=None, status="error") rather than raising, so the rest of
-the task pipeline (retries, validators, masking, rollback) can still
-be exercised and demoed end-to-end while a given driver is stubbed.
-This is the seam where a real driver (paramiko/ncclient/requests/...)
-gets dropped in later -- see _run_local for the pattern to follow.
 """
-
 import subprocess
+import paramiko
 from dataclasses import dataclass
 
-# node_type -> connection defaults, exposed later via GET /meta/node-types (spec 8.6).
 CONNECTION_DEFAULTS = {
     "local": {"timeout": 30},
     "ssh": {"port": 22, "timeout": 30},
@@ -43,7 +35,7 @@ CONNECTION_DEFAULTS = {
     "api_redfish": {"timeout": 30},
 }
 
-IMPLEMENTED_NODE_TYPES = {"local"}
+IMPLEMENTED_NODE_TYPES = {"local", "ssh"}
 
 
 @dataclass
@@ -61,7 +53,8 @@ class ConnectionManager:
 
     def __init__(self, timeout: int = 30):
         self.timeout = timeout
-        self._open_connections: list = []  # placeholder for future ssh/netconf session objects
+        self._open_connections: list = []
+        self._ssh_clients: dict = {}  # host key -> paramiko.SSHClient, reused across tasks in the same job
 
     def __enter__(self):
         return self
@@ -73,13 +66,21 @@ class ConnectionManager:
         for conn in self._open_connections:
             try:
                 conn.close()
-            except Exception:  # noqa: BLE001 -- best-effort cleanup
+            except Exception:  # noqa: BLE001
+                pass
+        for client in self._ssh_clients.values():
+            try:
+                client.close()
+            except Exception:  # noqa: BLE001
                 pass
         self._open_connections = []
+        self._ssh_clients = {}
 
     def execute(self, node_type: str, host: dict | None, command: str) -> ExecOutcome:
         if node_type == "local":
             return self._run_local(command)
+        if node_type == "ssh":
+            return self._run_ssh(host, command)
         if node_type in IMPLEMENTED_NODE_TYPES:
             raise AssertionError(f"'{node_type}' marked implemented but has no handler")
         return ExecOutcome(
@@ -87,7 +88,7 @@ class ConnectionManager:
             stdout="",
             stderr=(
                 f"node_type '{node_type}' is not wired up in this build yet -- only "
-                f"'local' has a real driver. See app/engine/connection_manager.py."
+                f"'local' and 'ssh' have a real driver. See app/engine/connection_manager.py."
             ),
         )
 
@@ -103,5 +104,46 @@ class ConnectionManager:
             return ExecOutcome(exit_code=proc.returncode, stdout=proc.stdout, stderr=proc.stderr)
         except subprocess.TimeoutExpired:
             return ExecOutcome(exit_code=None, stdout="", stderr=f"command timed out after {self.timeout}s")
-        except Exception as exc:  # noqa: BLE001 -- surfaced as a task failure, not a crash
+        except Exception as exc:  # noqa: BLE001
             return ExecOutcome(exit_code=None, stdout="", stderr=f"local execution error: {exc}")
+
+    def _get_ssh_client(self, host: dict) -> paramiko.SSHClient:
+        """host is expected to look like:
+        {
+          "ip": "1.2.3.4",
+          "port": 22,
+          "user_matrix": [{"username": "...", "password": "..."}]
+        }
+        Reuses one connection per host for the lifetime of this job,
+        instead of reconnecting for every single task."""
+        key = f"{host.get('ip')}:{host.get('port', 22)}"
+        if key in self._ssh_clients:
+            return self._ssh_clients[key]
+
+        creds = (host.get("user_matrix") or [{}])[0]
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(
+            hostname=host.get("ip"),
+            port=int(host.get("port", 22)),
+            username=creds.get("username"),
+            password=creds.get("password"),
+            timeout=self.timeout,
+        )
+        self._ssh_clients[key] = client
+        return client
+
+    def _run_ssh(self, host: dict | None, command: str) -> ExecOutcome:
+        if not host or not host.get("ip"):
+            return ExecOutcome(exit_code=None, stdout="", stderr="ssh task has no host/ip resolved")
+        try:
+            client = self._get_ssh_client(host)
+            stdin, stdout, stderr = client.exec_command(command, timeout=self.timeout)
+            exit_code = stdout.channel.recv_exit_status()
+            out = stdout.read().decode(errors="replace")
+            err = stderr.read().decode(errors="replace")
+            return ExecOutcome(exit_code=exit_code, stdout=out, stderr=err)
+        except paramiko.AuthenticationException:
+            return ExecOutcome(exit_code=None, stdout="", stderr="ssh authentication failed")
+        except Exception as exc:  # noqa: BLE001
+            return ExecOutcome(exit_code=None, stdout="", stderr=f"ssh execution error: {exc}")        
