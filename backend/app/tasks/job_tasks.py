@@ -32,7 +32,9 @@ def _build_inventory_dict(inventory: Inventory, db) -> dict:
         })
 
     return {"hosts": hosts, "groups": groups}
-    def _is_cancel_requested(job_id: int) -> bool:
+
+
+def _is_cancel_requested(job_id: int) -> bool:
     # Har baar nayi session lete hain, taaki MySQL purana (cached) status na dikhaye
     check_db = SessionLocal()
     try:
@@ -48,10 +50,11 @@ def execute_job_task(job_id: int):
     try:
         job = db.query(Job).filter(Job.id == job_id).first()
         if not job:
-                    # Queue mein rehte hue cancel ho gaya tha to chalana hi nahi hai
+            return {"message": f"Job {job_id} not found"}
+
+        # Queue mein rehte hue cancel ho gaya tha to chalana hi nahi hai
         if job.status == "cancelled":
             return {"message": "Job was cancelled before start", "job_id": job_id}
-            return {"message": f"Job {job_id} not found"}
 
         workbook = db.query(Workbook).filter(Workbook.id == job.workbook_id).first()
         inventory = db.query(Inventory).filter(Inventory.id == job.inventory_id).first()
@@ -75,7 +78,6 @@ def execute_job_task(job_id: int):
             workflows=None,
             only_tasks=None,
             should_cancel=lambda: _is_cancel_requested(job_id),
-
             on_output=lambda line: collected_output.append(line),
             timeout=300,
         )
