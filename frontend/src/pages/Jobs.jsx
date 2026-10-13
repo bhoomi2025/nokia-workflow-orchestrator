@@ -9,6 +9,8 @@ function Badge({ status }) {
     failed: "bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/20",
     running: "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20",
     queued: "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20",
+    cancelled: "bg-zinc-500/10 text-zinc-400 ring-1 ring-zinc-500/20",
+    cancelling: "bg-orange-500/10 text-orange-400 ring-1 ring-orange-500/20",
   };
   return (
     <span className={`px-2.5 py-1 rounded-full text-xs uppercase font-medium ${styles[s] || styles.queued}`}>
@@ -80,6 +82,17 @@ function Jobs({ token, onChanged }) {
     setWorkbookId("");
     setInventoryId("");
     setShowForm(false);
+    load();
+    onChanged?.();
+  }
+
+  async function handleCancel(jobId) {
+    if (!window.confirm(`Cancel job #${jobId}?`)) return;
+    const { ok, data } = await apiFetch(`/jobs/${jobId}/cancel`, token, { method: "POST" });
+    if (!ok) {
+      alert(data.detail || "Could not cancel job.");
+      return;
+    }
     load();
     onChanged?.();
   }
@@ -177,18 +190,19 @@ function Jobs({ token, onChanged }) {
               <th className="px-5 py-2.5">Status</th>
               <th className="px-5 py-2.5">Started</th>
               <th className="px-5 py-2.5">Finished</th>
+              <th className="px-5 py-2.5">Action</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="6" className="text-center text-zinc-600 py-8">
+                <td colSpan="7" className="text-center text-zinc-600 py-8">
                   Loading…
                 </td>
               </tr>
             ) : sortedJobs.length === 0 ? (
               <tr>
-                <td colSpan="6" className="text-center text-zinc-600 py-8">
+                <td colSpan="7" className="text-center text-zinc-600 py-8">
                   No jobs run yet
                 </td>
               </tr>
@@ -203,6 +217,16 @@ function Jobs({ token, onChanged }) {
                   </td>
                   <td className="px-5 py-3">{fmtTime(j.started_at)}</td>
                   <td className="px-5 py-3">{fmtTime(j.finished_at)}</td>
+                  <td className="px-5 py-3">
+                    {(j.status === "queued" || j.status === "running") && (
+                      <button
+                        onClick={() => handleCancel(j.id)}
+                        className="text-xs text-rose-400 hover:text-rose-300 border border-rose-500/30 hover:border-rose-500/60 rounded-md px-2.5 py-1 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))
             )}
