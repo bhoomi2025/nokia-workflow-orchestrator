@@ -23,6 +23,8 @@ def get_all(db: Session = Depends(get_db), current_user: User = Depends(get_curr
 @router.get("/{job_id}")
 def get_by_id(job_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return get_job_by_id(db, job_id)
-    @router.post("/{job_id}/cancel")
+
+
+@router.post("/{job_id}/cancel")
 def cancel(job_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return cancel_job(db, job_id)
