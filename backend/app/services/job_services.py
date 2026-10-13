@@ -1,4 +1,6 @@
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone
+from fastapi import HTTPException
 
 from app.model.job import Job
 from app.model.workbook import Workbook
@@ -46,3 +48,22 @@ def get_all_jobs(db: Session):
 
 def get_job_by_id(db: Session, job_id: int):
     return db.query(Job).filter(Job.id == job_id).first()
+    def cancel_job(db: Session, job_id: int):
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Abhi queue mein hai, shuru hi nahi hua: seedha cancel kar do
+    if job.status == "queued":
+        job.status = "cancelled"
+        job.finished_at = datetime.now(timezone.utc)
+        db.commit()
+        return {"message": "Job cancelled", "data": job}
+
+    # Chal raha hai: worker ko bolna padega ki ruk jao
+    if job.status == "running":
+        job.status = "cancelling"
+        db.commit()
+        return {"message": "Cancel requested. Job will stop after the current task.", "data": job}
+
+    raise HTTPException(status_code=400, detail=f"Job is already {job.status}")
