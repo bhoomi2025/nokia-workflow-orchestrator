@@ -1,10 +1,11 @@
+import os
 from celery import Celery
+from dotenv import load_dotenv
 
-# NOTE: For a real/public project this URL should come from an environment
-# variable (e.g. os.environ["REDIS_URL"]), not be hardcoded. Kept inline here
-# for simplicity during development — move it to a .env file before sharing
-# this repo publicly, since it contains your Redis password.
-REDIS_URL = "redis://default:LkProcM7mKSen7DiYEBAA9mMbD9KGxGA@small-wheel-tiger-52221.db.redis.io:18659"
+load_dotenv()
+
+# Redis URL .env file se aata hai, code mein password nahi likhna
+REDIS_URL = os.environ["REDIS_URL"]
 
 celery_app = Celery(
     "workflow_orchestrator",
