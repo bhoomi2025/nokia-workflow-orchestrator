@@ -67,3 +67,25 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(oauth2_
         raise credentials_exception
 
     return user
+
+
+ROLE_RANK = {"Viewer": 1, "Operator": 2, "Editor": 3, "Admin": 4}
+
+
+def require_role(min_role: str):
+    """Use as: current_user: User = Depends(require_role("Editor")).
+    Viewer < Operator < Editor < Admin; a higher role can do everything a lower one can."""
+    if min_role not in ROLE_RANK:
+        raise ValueError(f"Unknown role '{min_role}'")
+
+    def checker(current_user: User = Depends(get_current_user)) -> User:
+        if not current_user.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled")
+        if ROLE_RANK.get(current_user.role, 0) < ROLE_RANK[min_role]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"{min_role} role or higher is required for this action",
+            )
+        return current_user
+
+    return checker

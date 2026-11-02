@@ -1,5 +1,5 @@
 from .user import User
-from .workbook import Workbook
+from .workbook import Workbook, WorkbookVersion
 from .inventory import Inventory, Credential
 from .job import Job
 from .flow import Flow, FlowStep

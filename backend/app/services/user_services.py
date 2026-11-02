@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.model.user import User
@@ -20,10 +21,14 @@ def create_user(db: Session, user: UserRegister):
         }
 
     
+    # The very first account becomes Admin so someone can manage roles;
+    # everyone after that starts as Viewer until an Admin promotes them.
+    first_user = db.query(User).count() == 0
+
     new_user = User(
         email=user.email,
         password_hash=hash_password(user.password),
-        role="Viewer",
+        role="Admin" if first_user else "Viewer",
         is_active=True
     )
 
@@ -63,3 +68,19 @@ def login_user(db: Session, email: str, password: str):
         "access_token": token,
         "token_type": "bearer"
     }
+
+
+def list_users(db: Session):
+    return db.query(User).order_by(User.id).all()
+
+
+def update_user_role(db: Session, user_id: int, role: str, acting_user: User):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == acting_user.id and role != user.role:
+        raise HTTPException(status_code=400, detail="You cannot change your own role")
+    user.role = role
+    db.commit()
+    db.refresh(user)
+    return user

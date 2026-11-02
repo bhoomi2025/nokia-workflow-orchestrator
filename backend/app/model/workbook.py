@@ -24,3 +24,16 @@ class Workbook(Base):
         server_default=func.now(),
         onupdate=func.now()
     )
+
+
+class WorkbookVersion(Base):
+    """Immutable snapshot of a workbook's content; every real change adds a row."""
+    __tablename__ = "workbook_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    workbook_id = Column(Integer, ForeignKey("workbooks.id"), nullable=False, index=True)
+    version_no = Column(Integer, nullable=False)
+    content = Column(Text, nullable=True)
+    change_notes = Column(String(255), nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
